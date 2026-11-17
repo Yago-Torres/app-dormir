@@ -1,0 +1,66 @@
+# Compila Nana SIN firmar y la deja en la release «ios». La firma la pone SideStore en el iPhone con un Apple ID
+# gratis (README.md). Gratis: los Mac de Actions no cuestan nada en un repo público.
+name: iOS
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  ipa:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Xcode
+        run: |
+          sudo xcode-select -s "$(ls -d /Applications/Xcode_16*.app | sort -V | tail -1)"
+          xcodebuild -version
+
+      - name: Proyecto (XcodeGen)
+        run: |
+          brew install xcodegen
+          xcodegen generate
+
+      - name: Compilar
+        run: |
+          set -o pipefail
+          xcodebuild -project Nana.xcodeproj -scheme Nana -configuration Release \
+            -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            MARKETING_VERSION="1.${{ github.run_number }}" CURRENT_PROJECT_VERSION="${{ github.run_number }}" \
+            build 2>&1 | tee build.log | xcbeautify --renderer github-actions
+
+      - name: Empaquetar el IPA
+        run: |
+          APP=build/Build/Products/Release-iphoneos/Nana.app
+          brew install ldid
+          ldid -SNana/Nana.entitlements "$APP"
+          mkdir -p Payload && cp -R "$APP" Payload/
+          zip -qry Nana.ipa Payload
+          ls -la Nana.ipa
+
+      - name: Publicar en la release «ios»
+        if: github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          NOTAS="Compilada $(date -u '+%Y-%m-%d %H:%M') UTC desde ${GITHUB_SHA::7}. Instálala con SideStore (README.md)."
+          gh release view ios >/dev/null 2>&1 || gh release create ios --title "Nana para iPhone" --notes "$NOTAS" --prerelease
+          gh release edit ios --title "Nana para iPhone" --notes "$NOTAS"
+          gh release upload ios Nana.ipa --clobber
+
+      # si falla, el registro queda descargable sin iniciar sesión (para arreglarlo desde la Pi)
+      - name: Registro del fallo
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view ios-log >/dev/null 2>&1 || gh release create ios-log --title "Registro de la compilación fallida" --notes "Solo para depurar" --prerelease
+          grep -E "error:|BUILD FAILED|\*\* " build.log > errores.txt || true
+          tail -n 300 build.log >> errores.txt || echo "sin build.log" >> errores.txt
+          gh release upload ios-log errores.txt --clobber
