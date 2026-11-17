@@ -17,7 +17,7 @@ App de iPhone (SwiftUI, iOS 17+, pensada para el iPhone 15) que escucha mientras
 
 Igual que Tom (la guía completa de SideStore está en el README de `Yago-Torres/todo`, carpeta `ios/`):
 
-1. En el iPhone, abre en Safari `https://github.com/Yago-Torres/app-dormir-Aitana/releases/download/ios/Nana.ipa`.
+1. En el iPhone, abre en Safari `https://github.com/Yago-Torres/app-dormir/releases/download/ios/Nana.ipa`.
 2. SideStore → Mis apps → **+** → elige `Nana.ipa`.
 3. La primera vez que pulses «Empezar la noche», acepta el permiso del micrófono.
 
