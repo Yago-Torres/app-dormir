@@ -35,6 +35,7 @@ Con la cuenta gratis de Apple caben **3 apps activas contando SideStore**, y Nan
 | Fichero | Qué hace |
 |---|---|
 | `Nana/Motor.swift` | AVAudioEngine con el audio en segundo plano. Clasifica con `SNClassifySoundRequest(.version1)`, guarda clips AAC con 3 s de antes, resume cada minuto y calcula la huella (balance estéreo, tono y brillo). También el calibrador. |
+| `Nana/ProbarMicro.swift` | «Probar el micro» (en Ajustes): lo que oye ahora el clasificador y su confianza de ronquido frente al umbral, para comprobar sin esperar una noche que Nana os oye desde donde está el móvil. |
 | `Nana/Atribucion.swift` | Adivina quién era: el lado, los perfiles aprendidos o «no lo sé». |
 | `Nana/Almacen.swift` | `Documentos/nana.json` (noches y perfiles) y `Documentos/Clips/*.m4a`. Borra los clips viejos que no son favoritos. |
 | `Nana/Grabadora.swift` | Une el motor con la interfaz. Guarda la noche cada 5 minutos, así que si iOS cierra la app no se pierde. También el reproductor. |

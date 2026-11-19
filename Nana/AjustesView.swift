@@ -8,6 +8,7 @@ struct AjustesView: View {
     @State private var mensajeCalibrado: String?
     @State private var confirmarOlvido = false
     @State private var calibrador: Calibrador?
+    @State private var probando = false
 
     var body: some View {
         @Bindable var aj = ajustes
@@ -62,6 +63,7 @@ struct AjustesView: View {
                             set: { if $0 { aj.tiposGuardados.insert(t) } else { aj.tiposGuardados.remove(t) } }
                         )) { Label(t.plural, systemImage: t.icono) }
                     }
+                    Button { probando = true } label: { Label("Probar el micro", systemImage: "waveform.badge.magnifyingglass") }
                     Stepper("Un clip de ronquido cada \(Int(aj.pausaRonquidos)) min", value: $aj.pausaRonquidos, in: 1...30)
                     Stepper("Empezar a guardar a los \(Int(aj.retrasoInicio)) min", value: $aj.retrasoInicio, in: 0...60, step: 5)
                     Stepper("Máximo \(aj.maxClips) clips por noche", value: $aj.maxClips, in: 50...500, step: 50)
@@ -96,6 +98,7 @@ struct AjustesView: View {
             .scrollContentBackground(.hidden)
             .background(Estilo.fondo)
             .navigationTitle("Ajustes")
+            .sheet(isPresented: $probando) { ProbarMicroView() }
             .confirmationDialog("Nana volverá a no saber quién es quién por cómo suena.", isPresented: $confirmarOlvido, titleVisibility: .visible) {
                 Button("Olvidar", role: .destructive) { almacen.olvidarPerfiles() }
             }
