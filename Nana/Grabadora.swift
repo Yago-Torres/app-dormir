@@ -19,6 +19,20 @@ final class Grabadora {
     private var motor: Motor?
     private var almacen: Almacen?
     private var minutosSinGuardar = 0
+    private var ultimoSonido = Date()
+    private var vigilante: Timer?
+    private var avisadoSilencio = false
+
+    /// Apunta un problema en la noche en curso (y lo enseña en la pantalla). Sin repetir el mismo.
+    func avisa(_ texto: String) {
+        let linea = "\(Estilo.hora(Date())) · \(texto)"
+        error = texto
+        guard var n = noche else { return }
+        if n.avisos?.contains(where: { $0.hasSuffix(texto) }) == true { return }
+        n.avisos = (n.avisos ?? []) + [linea]
+        noche = n
+        almacen?.guardarNoche(n)
+    }
 
     @MainActor
     func empezar(cama: Cama, factores: [String: [Factor]], almacen: Almacen) async {
@@ -35,6 +49,7 @@ final class Grabadora {
         m.alNivel = { [weak self] db in self?.recibirNivel(db) }
         m.alMinuto = { [weak self] min in self?.recibir(min) }
         m.alEvento = { [weak self] e in self?.recibir(e) }
+        m.alAviso = { [weak self] texto in self?.avisa(texto) }
         m.alDetectar = { [weak self] t in
             self?.ultimoTipo = t
             self?.ultimoMomento = Date()
@@ -54,6 +69,16 @@ final class Grabadora {
         noche = n
         almacen.guardarNoche(n)
         aj.ultimaCama = cama
+        // si el micro deja de mandar sonido (iOS cortó la grabación), que se sepa en vez de grabar nada en silencio
+        ultimoSonido = Date()
+        avisadoSilencio = false
+        vigilante = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { [weak self] _ in
+            guard let self, self.noche != nil else { return }
+            if Date().timeIntervalSince(self.ultimoSonido) > 90, !self.avisadoSilencio {
+                self.avisadoSilencio = true
+                self.avisa("El micro lleva más de un minuto sin mandar sonido: iOS ha parado la grabación. Abre Nana para seguir.")
+            }
+        }
         // la pantalla puede bloquearse: la grabación sigue (modo audio en segundo plano)
         UIApplication.shared.isIdleTimerDisabled = false
     }
@@ -61,6 +86,8 @@ final class Grabadora {
     /// Termina la noche y devuelve su id cuando ya está guardada del todo.
     func terminar(_ listo: @escaping (UUID?) -> Void) {
         guard let motor else { listo(nil); return }
+        vigilante?.invalidate()
+        vigilante = nil
         motor.terminar()
         // el motor ya ha encolado en el hilo principal sus últimos minuto y clip: esto va detrás
         DispatchQueue.main.async { [weak self] in
@@ -70,11 +97,14 @@ final class Grabadora {
             self.noche = nil
             self.motor = nil
             self.ultimoTipo = nil
+            self.error = nil
             listo(n.id)
         }
     }
 
     private func recibirNivel(_ db: Double) {
+        ultimoSonido = Date()
+        if avisadoSilencio { avisadoSilencio = false; error = nil }   // ha vuelto
         nivel = db
         onda.removeFirst()
         onda.append(db)
@@ -108,16 +138,30 @@ final class Grabadora {
 final class Reproductor: NSObject, AVAudioPlayerDelegate {
     var sonando: UUID?
     var progreso = 0.0
+    var error: String?
+    /// De qué clip es el error (se enseña debajo de ese).
+    var errorDe: UUID?
     private var player: AVAudioPlayer?
     private var temporizador: Timer?
 
     func alternar(_ e: Evento) {
         if sonando == e.id { parar(); return }
         parar()
-        guard let url = Almacen.url(e.archivo) else { return }
+        error = nil
+        errorDe = e.id
+        guard let url = Almacen.url(e.archivo) else {
+            error = "Este clip ya no está en el móvil (se borran solos pasados los días de Ajustes)."
+            return
+        }
         try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .default, options: [.mixWithOthers])
         try? AVAudioSession.sharedInstance().setActive(true)
-        guard let p = try? AVAudioPlayer(contentsOf: url) else { return }
+        let p: AVAudioPlayer
+        do {
+            p = try AVAudioPlayer(contentsOf: url)
+        } catch {
+            self.error = "No puedo reproducir este clip: \(error.localizedDescription)"
+            return
+        }
         p.delegate = self
         p.play()
         player = p

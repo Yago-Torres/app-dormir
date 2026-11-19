@@ -182,6 +182,8 @@ final class Motor: NSObject, SNResultsObserving {
     var alMinuto: ((Minuto) -> Void)?
     var alEvento: ((Evento) -> Void)?
     var alDetectar: ((TipoSonido) -> Void)?
+    /// Algo ha ido mal a mitad de la noche (se dice en la pantalla y queda apuntado en la noche).
+    var alAviso: ((String) -> Void)?
     private(set) var estereo = false
 
     private let config: Config
@@ -210,6 +212,11 @@ final class Motor: NSObject, SNResultsObserving {
     private var clips = 0
     private var contadorNivel = 0
     private var observadores: [NSObjectProtocol] = []
+    private var avisadoClip = false
+
+    private func avisa(_ texto: String) {
+        DispatchQueue.main.async { [weak self] in self?.alAviso?(texto) }
+    }
 
     private static let prioridad: [TipoSonido] = [.habla, .risa, .tos, .ronquido]
 
@@ -263,8 +270,12 @@ final class Motor: NSObject, SNResultsObserving {
     private func rearrancar() {
         cerrarClip()
         engine.stop()
-        try? Sesion.configurar()
-        try? montar()
+        do {
+            try Sesion.configurar()
+            try montar()
+        } catch {
+            avisa("Se cortó el micro (una llamada, una alarma u otra app) y no he podido volver a grabar: \(error.localizedDescription)")
+        }
     }
 
     func terminar() {
@@ -355,8 +366,15 @@ final class Motor: NSObject, SNResultsObserving {
             AVNumberOfChannelsKey: 1,
             AVEncoderBitRateKey: 64000,
         ]
-        c.archivo = try? AVAudioFile(forWriting: url, settings: ajustes, commonFormat: .pcmFormatFloat32, interleaved: false)
-        guard c.archivo != nil else { return }
+        do {
+            c.archivo = try AVAudioFile(forWriting: url, settings: ajustes, commonFormat: .pcmFormatFloat32, interleaved: false)
+        } catch {
+            if !avisadoClip {   // una vez por noche: si falla uno, fallarán todos
+                avisadoClip = true
+                avisa("No puedo guardar los clips de sonido (¿sin espacio?): \(error.localizedDescription). Los minutos sí se cuentan.")
+            }
+            return
+        }
         for p in preRoll {
             try? c.archivo?.write(from: p.buf)
             c.segundos += Double(p.buf.frameLength) / sr
@@ -437,7 +455,9 @@ final class Motor: NSObject, SNResultsObserving {
     /// El umbral de confianza para contar un ronquido (también lo enseña la noche, para ajustar la sensibilidad).
     static func umbralRonquido(_ sensibilidad: Double) -> Double { sensibilidad * 0.6 }
 
-    func request(_ request: SNRequest, didFailWithError error: Error) {}
+    func request(_ request: SNRequest, didFailWithError error: Error) {
+        avisa("El reconocimiento de sonidos se ha parado: \(error.localizedDescription). Sigo midiendo el ruido, pero no sabré qué es.")
+    }
     func requestDidComplete(_ request: SNRequest) {}
 }
 

@@ -21,6 +21,13 @@ struct NocheDetalleView: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 16) {
                         cabecera(n)
+                        if let avisos = n.avisos, !avisos.isEmpty {
+                            Tarjeta(titulo: "Esta noche algo falló") {
+                                ForEach(avisos, id: \.self) { a in
+                                    Label(a, systemImage: "exclamationmark.triangle.fill").font(.footnote).foregroundStyle(.orange)
+                                }
+                            }
+                        }
                         puntuaciones(n)
                         if n.cama == .juntos { avisoDudas(n) }
                         grafica(n)
@@ -251,6 +258,7 @@ struct FilaEvento: View {
     @Environment(Reproductor.self) private var reproductor
 
     private var sonando: Bool { reproductor.sonando == evento.id }
+    private var errorAqui: String? { reproductor.errorDe == evento.id ? reproductor.error : nil }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -289,6 +297,9 @@ struct FilaEvento: View {
             }
             if noche.cama == .juntos {
                 quienEra
+            }
+            if let e = errorAqui {
+                Label(e, systemImage: "exclamationmark.triangle.fill").font(.caption).foregroundStyle(.orange)
             }
         }
         .padding(12)

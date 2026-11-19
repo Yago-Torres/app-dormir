@@ -28,7 +28,10 @@ struct InicioView: View {
                     factoresHoy
                     botonEmpezar
                     if let e = grabadora.error {
-                        Text(e).font(.footnote).foregroundStyle(.orange)
+                        Label(e, systemImage: "exclamationmark.triangle.fill").font(.footnote).foregroundStyle(.orange)
+                    }
+                    if let e = almacen.error {
+                        Label(e, systemImage: "externaldrive.badge.exclamationmark").font(.footnote).foregroundStyle(.orange)
                     }
                     consejo
                     if let ultima = almacen.nochesOrdenadas.first(where: { $0.fin != nil }) {

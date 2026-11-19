@@ -27,6 +27,8 @@ final class Almacen {
     var noches: [Noche] = []
     /// Clave: "<persona>-<tipo>", p. ej. "aitana-ronquido".
     var perfiles: [String: Perfil] = [:]
+    /// Si no se pudo leer o guardar nana.json (lo enseña Inicio).
+    var error: String?
 
     private struct Disco: Codable {
         var noches: [Noche]
@@ -39,10 +41,17 @@ final class Almacen {
 
     init() {
         try? FileManager.default.createDirectory(at: Self.carpetaClips, withIntermediateDirectories: true)
-        if let datos = try? Data(contentsOf: fichero),
-           let disco = try? JSONDecoder.nana.decode(Disco.self, from: datos) {
-            noches = disco.noches
-            perfiles = disco.perfiles
+        if let datos = try? Data(contentsOf: fichero) {
+            do {
+                let disco = try JSONDecoder.nana.decode(Disco.self, from: datos)
+                noches = disco.noches
+                perfiles = disco.perfiles
+            } catch {
+                // no se pisa: se aparta una copia antes de que el primer guardado lo sobrescriba
+                let copia = Self.documentos.appendingPathComponent("nana-ilegible-\(Int(Date().timeIntervalSince1970)).json")
+                try? FileManager.default.copyItem(at: fichero, to: copia)
+                self.error = "No he podido leer tus noches guardadas (\(error.localizedDescription)). Las he apartado en \(copia.lastPathComponent)."
+            }
         }
         // una noche que se quedó abierta (la app se cerró a la fuerza): se da por acabada en su último minuto
         for i in noches.indices where noches[i].fin == nil {
@@ -53,8 +62,12 @@ final class Almacen {
 
     func guardar() {
         let disco = Disco(noches: noches, perfiles: perfiles)
-        guard let datos = try? JSONEncoder.nana.encode(disco) else { return }
-        try? datos.write(to: fichero, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+        do {
+            let datos = try JSONEncoder.nana.encode(disco)
+            try datos.write(to: fichero, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+        } catch {
+            self.error = "No he podido guardar: \(error.localizedDescription)"
+        }
     }
 
     // MARK: noches

@@ -49,6 +49,13 @@ struct NocheEnCursoView: View {
 
                 Spacer()
 
+                if let e = grabadora.error {
+                    Label(e, systemImage: "exclamationmark.triangle.fill")
+                        .font(.footnote).foregroundStyle(.orange.opacity(0.85))
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 24)
+                }
+
                 botonTerminar
 
                 Text(grabadora.estereo ? "Micro en estéreo · puedes bloquear la pantalla" : "Puedes bloquear la pantalla")

@@ -209,6 +209,8 @@ struct Noche: Codable, Identifiable, Equatable {
     /// Cómo ha dormido cada una del 1 al 5 (clave: rawValue de Persona).
     var valoracion: [String: Int] = [:]
     var nota = ""
+    /// Lo que fue mal esa noche («se cortó el micro»…), con la hora. Opcional: las noches viejas no lo tienen.
+    var avisos: [String]?
 
     var duracion: TimeInterval { (fin ?? Date()).timeIntervalSince(inicio) }
     var horas: Double { max(duracion / 3600, 0.01) }
