@@ -136,7 +136,20 @@ struct NocheDetalleView: View {
                 }
                 .frame(height: 150)
                 leyenda(n)
+                diagnostico(n)
             }
+        }
+    }
+
+    /// Para ajustar la sensibilidad: lo más parecido a un ronquido que oyó, frente a lo que hace falta para contarlo.
+    @ViewBuilder
+    private func diagnostico(_ n: Noche) -> some View {
+        if let maximo = n.minutos.compactMap(\.maxRonquido).max() {
+            let umbral = Motor.umbralRonquido(Ajustes.compartidos.sensibilidad)
+            let pasan = n.minutos.filter { ($0.maxRonquido ?? 0) >= umbral }.count
+            Text("Ronquido más claro que oyó: \(Int(maximo * 100)) % (cuenta a partir del \(Int(umbral * 100)) %; \(pasan) min lo pasan)."
+                 + (maximo < umbral && maximo > umbral * 0.4 ? " Si roncabais, sube la sensibilidad en Ajustes." : ""))
+                .font(.caption2).foregroundStyle(Estilo.suave)
         }
     }
 

@@ -202,6 +202,7 @@ final class Motor: NSObject, SNResultsObserving {
     private var minutoInicio = Date()
     private var mSuma = 0.0, mMax = 0.0, mN = 0
     private var mVentanas: [TipoSonido: Int] = [:]
+    private var mMaxRonquido = 0.0   // lo más «ronquido» que oyó el clasificador este minuto, pase o no el umbral
     private var mHuella = AcumHuella()
 
     private var clip: Clip?
@@ -317,7 +318,9 @@ final class Motor: NSObject, SNResultsObserving {
             c.segundos += dur
             if db > suelo + 5 { c.acum.sumar(m, balance: balance, nivel: db, sr: sr) }
             if c.tipo == .ruido, db > suelo + 15 { c.ultimaActividad = segundos }
-            let espera = c.tipo == .habla ? 4.0 : 2.5
+            // un ronquido suena ~1–2 s y luego se respira 3–4 s en silencio: con 2,5 s el clip se cerraba entre
+            // dos ronquidos con 1–2 ventanas y se tiraba (pedía 3). 6 s cubre la respiración entera.
+            let espera = c.tipo == .habla ? 4.0 : (c.tipo == .ronquido ? 6.0 : 2.5)
             let maximo: Double = c.tipo == .habla ? 60 : (c.tipo == .ruido ? 15 : 20)
             if segundos - c.ultimaActividad > espera || c.segundos > maximo { cerrarClip() }
         } else if escuchando, clips < config.maxClips, let t = tipoParaAbrir(nivel: db) {
@@ -385,9 +388,10 @@ final class Motor: NSObject, SNResultsObserving {
 
     private func emitirMinuto() {
         guard mN > 0 else { return }
-        let m = Minuto(inicio: minutoInicio, nivelMedio: mSuma / Double(mN), nivelMax: mMax, ventanas: mVentanas, huella: mHuella.huella, quien: nil)
+        let m = Minuto(inicio: minutoInicio, nivelMedio: mSuma / Double(mN), nivelMax: mMax, ventanas: mVentanas, huella: mHuella.huella, quien: nil,
+                       maxRonquido: mMaxRonquido)
         minutoInicio = Date()
-        mSuma = 0; mMax = 0; mN = 0; mVentanas = [:]; mHuella = AcumHuella()
+        mSuma = 0; mMax = 0; mN = 0; mVentanas = [:]; mHuella = AcumHuella(); mMaxRonquido = 0
         DispatchQueue.main.async { [weak self] in self?.alMinuto?(m) }
     }
 
@@ -396,10 +400,18 @@ final class Motor: NSObject, SNResultsObserving {
     func request(_ request: SNRequest, didProduce result: SNResult) {
         guard let r = result as? SNClassificationResult else { return }
         var vistos: [TipoSonido: Double] = [:]
+        let ronquido = r.classification(forIdentifier: "snoring")?.confidence ?? 0
         for c in r.classifications {
             guard let t = TipoSonido.desde(etiqueta: c.identifier), vistos[t] == nil else { continue }
-            let umbral = t == .ronquido ? config.sensibilidad * 0.8 : config.sensibilidad
+            // el clasificador de Apple da al ronquido de verdad confianzas bajas (0,3–0,5 a un metro): umbral más bajo
+            let umbral = t == .ronquido ? Motor.umbralRonquido(config.sensibilidad) : config.sensibilidad
             if c.confidence >= umbral { vistos[t] = c.confidence }
+        }
+        if ronquido > 0 {
+            cola.async { [weak self] in
+                guard let self, self.escuchando else { return }
+                self.mMaxRonquido = max(self.mMaxRonquido, ronquido)
+            }
         }
         guard !vistos.isEmpty else { return }
         cola.async { [weak self] in
@@ -421,6 +433,9 @@ final class Motor: NSObject, SNResultsObserving {
             }
         }
     }
+
+    /// El umbral de confianza para contar un ronquido (también lo enseña la noche, para ajustar la sensibilidad).
+    static func umbralRonquido(_ sensibilidad: Double) -> Double { sensibilidad * 0.6 }
 
     func request(_ request: SNRequest, didFailWithError error: Error) {}
     func requestDidComplete(_ request: SNRequest) {}

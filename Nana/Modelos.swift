@@ -148,10 +148,13 @@ struct Minuto: Codable, Identifiable, Equatable {
     var ventanas: [TipoSonido: Int]
     var huella: Huella?
     var quien: Persona?
+    /// La confianza más alta de «ronquido» del minuto, aunque no pasara el umbral (diagnóstico; nil en noches viejas).
+    var maxRonquido: Double? = nil
 
     var id: Date { inicio }
 
-    var ronca: Bool { (ventanas[.ronquido] ?? 0) >= 6 }
+    /// Roncando: al menos 4 ventanas con ronquido en el minuto (un ronquido cada 4–5 s da 12–15 ronquidos por minuto).
+    var ronca: Bool { (ventanas[.ronquido] ?? 0) >= 4 }
     var habla: Bool { (ventanas[.habla] ?? 0) >= 2 }
 }
 
